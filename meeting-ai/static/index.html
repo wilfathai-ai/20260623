@@ -453,9 +453,11 @@ document.getElementById('analyze-btn').addEventListener('click', async () => {
     if (state.file) formData.append('file', state.file);
     else formData.append('text', text);
 
-    const res = await fetch('/api/analyze', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '解析に失敗しました。');
+    const startRes = await fetch('/api/analyze', { method: 'POST', body: formData });
+    const startData = await startRes.json();
+    if (!startRes.ok) throw new Error(startData.detail || '解析に失敗しました。');
+
+    const data = await pollAnalysis(startData.job_id);
 
     state.rawText = data.raw_text;
     state.analysis = data.analysis;
@@ -469,6 +471,22 @@ document.getElementById('analyze-btn').addEventListener('click', async () => {
     showToast(err.message, true);
   }
 });
+
+async function pollAnalysis(jobId) {
+  const startedAt = Date.now();
+  const loadingSub = document.getElementById('loading-sub');
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    loadingSub.textContent = `AIが議事録を読み込んでいます(${elapsed}秒経過)`;
+
+    const res = await fetch(`/api/analyze/${jobId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '解析に失敗しました。');
+    if (data.status === 'done') return data;
+    // status === 'running' のままなら継続してポーリング
+  }
+}
 
 document.getElementById('new-btn').addEventListener('click', resetAnalyzeView);
 function resetAnalyzeView() {

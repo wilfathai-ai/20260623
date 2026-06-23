@@ -4,12 +4,14 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
+import uuid
 from datetime import date
 
 import aiofiles
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -28,6 +30,9 @@ app.add_middleware(
 
 database.init_db()
 
+# 解析ジョブの状態を保持(プロキシ/トンネルのタイムアウトを避けるため、解析はバックグラウンドで実行しポーリングさせる)
+jobs: dict[str, dict] = {}
+
 
 class SaveRequest(BaseModel):
     raw_text: str
@@ -37,6 +42,16 @@ class SaveRequest(BaseModel):
 @app.on_event("startup")
 async def startup() -> None:
     database.init_db()
+
+
+def _run_analysis(job_id: str, raw_text: str) -> None:
+    try:
+        analysis = analyze_text(raw_text)
+        analysis.setdefault("client_name", "不明")
+        analysis.setdefault("meeting_date", date.today().isoformat())
+        jobs[job_id] = {"status": "done", "raw_text": raw_text, "analysis": analysis}
+    except AnalysisError as exc:
+        jobs[job_id] = {"status": "error", "error": str(exc)}
 
 
 @app.post("/api/analyze")
@@ -62,15 +77,20 @@ async def api_analyze(file: UploadFile | None = File(None), text: str | None = F
     else:
         raise HTTPException(status_code=400, detail="ファイルまたはテキストを指定してください。")
 
-    try:
-        analysis = analyze_text(raw_text)
-    except AnalysisError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "running"}
+    threading.Thread(target=_run_analysis, args=(job_id, raw_text), daemon=True).start()
+    return {"job_id": job_id}
 
-    analysis.setdefault("client_name", "不明")
-    analysis.setdefault("meeting_date", date.today().isoformat())
 
-    return JSONResponse({"raw_text": raw_text, "analysis": analysis})
+@app.get("/api/analyze/{job_id}")
+async def api_analyze_status(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="ジョブが見つかりません。")
+    if job["status"] == "error":
+        raise HTTPException(status_code=502, detail=job["error"])
+    return job
 
 
 @app.post("/api/save")
