@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商談議事録AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/white.css">
+<style>
+  :root {
+    --navy: #1B2A4A;
+    --gold: #C9A84C;
+    --white: #FFFFFF;
+    --gray: #F5F6F8;
+    --priority-high: #C0392B;
+    --priority-mid: #D4A017;
+    --priority-low: #2E7D32;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Noto Sans JP", sans-serif;
+    background: var(--gray);
+    color: var(--navy);
+  }
+  h1, h2, h3 { font-family: "Noto Serif JP", serif; margin: 0 0 .5em; }
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    background: var(--navy);
+    color: var(--white);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 16px;
+    flex-shrink: 0;
+  }
+  .brand {
+    font-family: "Noto Serif JP", serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 32px;
+    color: var(--gold);
+    letter-spacing: .03em;
+  }
+  .nav-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--white);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    transition: background .15s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,.08); }
+  .nav-btn.active { background: var(--gold); color: var(--navy); font-weight: 700; }
+
+  .content { flex: 1; padding: 32px 40px; max-width: 1100px; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .upload-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  .dropzone {
+    border: 2px dashed #C9CFDA;
+    border-radius: 10px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: var(--gold); background: #FFFAF0; }
+  .dropzone .icon { font-size: 36px; margin-bottom: 8px; }
+  .dropzone .hint { color: #8892A0; font-size: 13px; margin-top: 6px; }
+  .divider { text-align: center; color: #8892A0; margin: 20px 0; font-size: 13px; }
+  #text-input {
+    width: 100%;
+    min-height: 140px;
+    border: 1px solid #C9CFDA;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+  .file-chip {
+    margin-top: 12px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: var(--gray);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .file-chip.show { display: flex; }
+
+  .btn-primary {
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn-primary:hover { opacity: .9; }
+  .btn-primary:active { transform: scale(.98); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary {
+    background: transparent;
+    color: var(--navy);
+    border: 1px solid var(--navy);
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 20px;
+    margin-left: 12px;
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid #C9CFDA;
+    color: var(--navy);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  #loading-view {
+    text-align: center;
+    padding: 100px 0;
+  }
+  .spinner {
+    width: 56px; height: 56px;
+    border: 5px solid #DDE2EA;
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-view p { font-size: 16px; font-weight: 500; }
+  #loading-sub { color: #8892A0; font-size: 13px; margin-top: 6px; }
+
+  .result-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #E2E6ED;
+  }
+  .result-tab-btn {
+    background: transparent;
+    border: none;
+    padding: 10px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    color: #5A6478;
+    font-weight: 500;
+  }
+  .result-tab-btn.active { color: var(--navy); border-bottom-color: var(--gold); font-weight: 700; }
+
+  .result-panel { display: none; animation: fadein .25s; }
+  .result-panel.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .card {
+    background: var(--white);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+    border-left: 4px solid var(--gold);
+  }
+  .card h4 { margin: 0 0 6px; font-family: "Noto Sans JP"; font-size: 15px; font-weight: 700; }
+  .card p { margin: 0; font-size: 13.5px; color: #444C5C; line-height: 1.6; }
+
+  .priority-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: var(--white);
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .priority-高 { background: var(--priority-high); }
+  .priority-中 { background: var(--priority-mid); }
+  .priority-低 { background: var(--priority-low); }
+  .card.problem-高 { border-left-color: var(--priority-high); }
+  .card.problem-中 { border-left-color: var(--priority-mid); }
+  .card.problem-低 { border-left-color: var(--priority-low); }
+
+  .task-card { display: flex; align-items: flex-start; gap: 12px; }
+  .task-card input[type=checkbox] { width: 18px; height: 18px; margin-top: 2px; }
+  .task-card.done p, .task-card.done h4 { text-decoration: line-through; opacity: .5; }
+  .task-meta { font-size: 12px; color: #8892A0; margin-top: 4px; }
+
+  table.estimate-table { width: 100%; border-collapse: collapse; background: var(--white); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
+  table.estimate-table th, table.estimate-table td { padding: 10px 14px; text-align: left; font-size: 13.5px; border-bottom: 1px solid #EEF0F4; }
+  table.estimate-table th { background: var(--navy); color: var(--white); }
+  table.estimate-table tfoot td { font-weight: 700; background: var(--gray); }
+  .estimate-notes { margin-top: 12px; font-size: 13px; color: #5A6478; }
+
+  .risk-box { background: #FFF6E5; border: 1px solid var(--gold); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; font-size: 13px; }
+  .risk-box ul { margin: 6px 0 0; padding-left: 20px; }
+
+  .slide-thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .slide-thumb {
+    background: var(--white); border: 1px solid #E2E6ED; border-radius: 10px; padding: 16px;
+    aspect-ratio: 4/3; display: flex; flex-direction: column; cursor: pointer; transition: box-shadow .15s;
+  }
+  .slide-thumb:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); border-color: var(--gold); }
+  .slide-thumb h5 { font-family: "Noto Serif JP"; font-size: 14px; margin: 0 0 8px; color: var(--navy); }
+  .slide-thumb .body { font-size: 11px; color: #5A6478; overflow: hidden; flex: 1; white-space: pre-line; }
+  .slide-thumb .type-tag { font-size: 10px; color: var(--gold); text-transform: uppercase; margin-top: 8px; }
+
+  textarea#review-text {
+    width: 100%; min-height: 320px; border: 1px solid #C9CFDA; border-radius: 8px;
+    padding: 14px; font-family: "Noto Sans JP"; font-size: 13.5px; line-height: 1.7;
+  }
+
+  .actions { margin-top: 24px; }
+
+  .history-toolbar { margin-bottom: 16px; }
+  #history-search {
+    width: 320px; padding: 10px 14px; border: 1px solid #C9CFDA; border-radius: 8px; font-size: 14px;
+  }
+  .history-item {
+    background: var(--white); border-radius: 10px; padding: 16px 20px; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 1px 6px rgba(0,0,0,.05); cursor: pointer;
+  }
+  .history-item:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); }
+  .history-item .meta { font-size: 12px; color: #8892A0; margin-top: 4px; }
+  .history-item .del-btn { background: transparent; border: none; color: #C0392B; font-size: 13px; cursor: pointer; }
+  .empty-state { text-align: center; color: #8892A0; padding: 60px 0; font-size: 14px; }
+
+  .modal {
+    position: fixed; inset: 0; background: var(--navy); z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal.hidden { display: none; }
+  #slide-close, #detail-close {
+    position: absolute; top: 20px; right: 28px; background: transparent; border: none;
+    color: var(--white); font-size: 24px; cursor: pointer; z-index: 101;
+  }
+  .reveal { width: 100%; height: 100%; }
+  .reveal .slides section {
+    background: var(--white); border-radius: 16px; padding: 48px 64px;
+    max-width: 860px; margin: 0 auto; box-shadow: 0 12px 48px rgba(0,0,0,.3);
+  }
+  .reveal .slides section h2 { color: var(--navy); font-family: "Noto Serif JP"; }
+  .reveal .slides section p { font-family: "Noto Sans JP"; white-space: pre-line; text-align: left; font-size: 0.7em; color: #333; }
+
+  #detail-modal .detail-box {
+    background: var(--white); border-radius: 12px; padding: 32px; max-width: 800px; max-height: 80vh;
+    overflow-y: auto; width: 90%;
+  }
+
+  .toast-stack { position: fixed; bottom: 24px; right: 24px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--navy); color: var(--white); padding: 12px 18px; border-radius: 8px;
+    font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.2); animation: fadein .2s;
+  }
+  .toast.error { background: var(--priority-high); }
+
+  .hidden { display: none !important; }
+
+  @media print {
+    .sidebar, .result-tabs, .actions, .file-chip { display: none !important; }
+    .result-panel { display: block !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">商談議事録AI</div>
+    <nav>
+      <button class="nav-btn active" data-tab="analyze">📋 新規解析</button>
+      <button class="nav-btn" data-tab="history">📚 議事録一覧</button>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <section id="tab-analyze" class="tab-pane active">
+      <div id="upload-view">
+        <h1>商談議事録の解析</h1>
+        <div class="upload-card">
+          <div id="dropzone" class="dropzone">
+            <div class="icon">📁</div>
+            <div>クリックまたはドラッグ&amp;ドロップでファイルをアップロード</div>
+            <div class="hint">対応形式: .docx / .pdf / .txt</div>
+          </div>
+          <input type="file" id="file-input" accept=".docx,.pdf,.txt" hidden>
+          <div class="file-chip" id="file-chip">
+            <span id="file-chip-name"></span>
+            <button class="btn-ghost" id="file-chip-clear">✕</button>
+          </div>
+          <div class="divider">または</div>
+          <textarea id="text-input" placeholder="議事録テキストを直接貼り付け"></textarea>
+          <button id="analyze-btn" class="btn-primary">解析スタート</button>
+        </div>
+      </div>
+
+      <div id="loading-view" class="hidden">
+        <div class="spinner"></div>
+        <p>解析中...</p>
+        <div id="loading-sub">AIが議事録を読み込んでいます</div>
+      </div>
+
+      <div id="result-view" class="hidden">
+        <div class="result-tabs">
+          <button class="result-tab-btn active" data-result-tab="problems">🔴 問題点</button>
+          <button class="result-tab-btn" data-result-tab="tasks">✅ タスク一覧</button>
+          <button class="result-tab-btn" data-result-tab="documents">📄 書類補助</button>
+          <button class="result-tab-btn" data-result-tab="estimate">💰 見積もり</button>
+          <button class="result-tab-btn" data-result-tab="slides">🖥️ スライド</button>
+          <button class="result-tab-btn" data-result-tab="review">📝 議事録レビュー</button>
+        </div>
+        <div class="result-panels">
+          <div id="panel-problems" class="result-panel active"></div>
+          <div id="panel-tasks" class="result-panel"></div>
+          <div id="panel-documents" class="result-panel"></div>
+          <div id="panel-estimate" class="result-panel"></div>
+          <div id="panel-slides" class="result-panel"></div>
+          <div id="panel-review" class="result-panel"></div>
+        </div>
+        <div class="actions">
+          <button id="save-btn" class="btn-primary">議事録として保存</button>
+          <button id="new-btn" class="btn-secondary">新しい解析</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-history" class="tab-pane">
+      <h1>議事録一覧</h1>
+      <div class="history-toolbar">
+        <input type="search" id="history-search" placeholder="クライアント名・概要で検索">
+      </div>
+      <div id="history-list"></div>
+    </section>
+  </main>
+</div>
+
+<div id="slide-modal" class="modal hidden">
+  <button id="slide-close">✕ 閉じる</button>
+  <div class="reveal"><div class="slides" id="slide-container"></div></div>
+</div>
+
+<div id="detail-modal" class="modal hidden">
+  <button id="detail-close">✕ 閉じる</button>
+  <div class="detail-box" id="detail-box"></div>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.js"></script>
+<script>
+const state = { rawText: null, analysis: null, file: null };
+
+function showToast(message, isError) {
+  const stack = document.getElementById('toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.textContent = message;
+  stack.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ---- Sidebar tab switching ----
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'history') loadHistory();
+  });
+});
+
+// ---- Result sub-tab switching ----
+document.querySelectorAll('.result-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.result-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.result-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.resultTab).classList.add('active');
+  });
+});
+
+// ---- File upload / dropzone ----
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const fileChip = document.getElementById('file-chip');
+const fileChipName = document.getElementById('file-chip-name');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) setFile(fileInput.files[0]);
+});
+function setFile(file) {
+  state.file = file;
+  fileChipName.textContent = file.name;
+  fileChip.classList.add('show');
+}
+document.getElementById('file-chip-clear').addEventListener('click', () => {
+  state.file = null;
+  fileInput.value = '';
+  fileChip.classList.remove('show');
+});
+
+// ---- Analyze ----
+document.getElementById('analyze-btn').addEventListener('click', async () => {
+  const text = document.getElementById('text-input').value.trim();
+  if (!state.file && !text) {
+    showToast('ファイルをアップロード、またはテキストを入力してください。', true);
+    return;
+  }
+
+  document.getElementById('upload-view').classList.add('hidden');
+  document.getElementById('loading-view').classList.remove('hidden');
+
+  try {
+    const formData = new FormData();
+    if (state.file) formData.append('file', state.file);
+    else formData.append('text', text);
+
+    const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '解析に失敗しました。');
+
+    state.rawText = data.raw_text;
+    state.analysis = data.analysis;
+    renderResults(data.analysis);
+
+    document.getElementById('loading-view').classList.add('hidden');
+    document.getElementById('result-view').classList.remove('hidden');
+  } catch (err) {
+    document.getElementById('loading-view').classList.add('hidden');
+    document.getElementById('upload-view').classList.remove('hidden');
+    showToast(err.message, true);
+  }
+});
+
+document.getElementById('new-btn').addEventListener('click', resetAnalyzeView);
+function resetAnalyzeView() {
+  state.rawText = null;
+  state.analysis = null;
+  state.file = null;
+  fileInput.value = '';
+  fileChip.classList.remove('show');
+  document.getElementById('text-input').value = '';
+  document.getElementById('result-view').classList.add('hidden');
+  document.getElementById('upload-view').classList.remove('hidden');
+  document.querySelectorAll('.result-tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('.result-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+}
+
+// ---- Render result panels ----
+function renderResults(analysis) {
+  renderProblems(analysis.problems || []);
+  renderTasks(analysis.tasks || []);
+  renderDocuments(analysis.documents_needed || []);
+  renderEstimate(analysis.estimate || {});
+  renderSlideThumbs(analysis.slides || []);
+  renderReview(analysis);
+}
+
+function renderProblems(problems) {
+  const panel = document.getElementById('panel-problems');
+  if (!problems.length) { panel.innerHTML = '<div class="empty-state">問題点は検出されませんでした。</div>'; return; }
+  panel.innerHTML = problems.map(p => `
+    <div class="card problem-${esc(p.priority || '中')}">
+      <h4>${esc(p.title)}<span class="priority-badge priority-${esc(p.priority || '中')}">${esc(p.priority || '中')}</span></h4>
+      <p>${esc(p.detail || '')}</p>
+    </div>
+  `).join('');
+}
+
+function renderTasks(tasks) {
+  const panel = document.getElementById('panel-tasks');
+  if (!tasks.length) { panel.innerHTML = '<div class="empty-state">タスクは検出されませんでした。</div>'; return; }
+  panel.innerHTML = tasks.map((t, i) => `
+    <div class="card task-card" id="task-${i}">
+      <input type="checkbox" onchange="document.getElementById('task-${i}').classList.toggle('done', this.checked)">
+      <div>
+        <h4>${esc(t.task)}</h4>
+        <div class="task-meta">担当: ${esc(t.owner || '未指定')} ／ 期限: ${esc(t.deadline || '未指定')} ／ 状態: ${esc(t.status || '未完了')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDocuments(docs) {
+  const panel = document.getElementById('panel-documents');
+  if (!docs.length) { panel.innerHTML = '<div class="empty-state">必要な書類は検出されませんでした。</div>'; return; }
+  panel.innerHTML = docs.map(d => `
+    <div class="card">
+      <h4>${esc(d.doc_name)}</h4>
+      <p><strong>用途:</strong> ${esc(d.purpose || '')}</p>
+      <p><strong>記載ヒント:</strong> ${esc(d.template_hint || '')}</p>
+    </div>
+  `).join('');
+}
+
+function renderEstimate(estimate) {
+  const panel = document.getElementById('panel-estimate');
+  const items = estimate.items || [];
+  if (!items.length) { panel.innerHTML = '<div class="empty-state">見積もり項目は検出されませんでした。</div>'; return; }
+  const rows = items.map(it => `
+    <tr>
+      <td>${esc(it.name)}</td>
+      <td>${esc(it.detail || '')}</td>
+      <td>${formatAmount(it.amount)} ${esc(it.unit || '円')}</td>
+    </tr>
+  `).join('');
+  panel.innerHTML = `
+    <table class="estimate-table">
+      <thead><tr><th>項目</th><th>説明</th><th>金額</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="2">合計</td><td>${formatAmount(estimate.total)} 円</td></tr></tfoot>
+    </table>
+    <div class="estimate-notes">${esc(estimate.notes || '')}</div>
+  `;
+}
+
+function renderSlideThumbs(slides) {
+  const panel = document.getElementById('panel-slides');
+  if (!slides.length) { panel.innerHTML = '<div class="empty-state">スライドは生成されませんでした。</div>'; return; }
+  panel.innerHTML = `
+    <button class="btn-secondary" id="present-btn" style="margin:0 0 16px;">🖥️ フルスクリーンで表示</button>
+    <div class="slide-thumb-grid">
+      ${slides.map(s => `
+        <div class="slide-thumb">
+          <h5>${esc(s.title)}</h5>
+          <div class="body">${esc(s.content)}</div>
+          <div class="type-tag">${esc(s.type || '')}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  document.getElementById('present-btn').addEventListener('click', () => openSlideShow(slides));
+}
+
+function renderReview(analysis) {
+  const panel = document.getElementById('panel-review');
+  const lines = [];
+  lines.push(`【概要】\n${analysis.summary || ''}`);
+  lines.push(`\n【クライアント】${analysis.client_name || '不明'}　【商談日】${analysis.meeting_date || ''}`);
+  if ((analysis.problems || []).length) {
+    lines.push('\n【問題点】');
+    analysis.problems.forEach(p => lines.push(`- [${p.priority || '中'}] ${p.title}: ${p.detail || ''}`));
+  }
+  if ((analysis.tasks || []).length) {
+    lines.push('\n【タスク】');
+    analysis.tasks.forEach(t => lines.push(`- ${t.task}（担当: ${t.owner || '未指定'} / 期限: ${t.deadline || '未指定'}）`));
+  }
+  if ((analysis.risk_notes || []).length) {
+    lines.push('\n【リスク・注意点】');
+    analysis.risk_notes.forEach(r => lines.push(`- ${r}`));
+  }
+  const riskHtml = (analysis.risk_notes || []).length ? `
+    <div class="risk-box">
+      <strong>⚠️ リスク・見落とし注意点</strong>
+      <ul>${analysis.risk_notes.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+    </div>
+  ` : '';
+  panel.innerHTML = `
+    ${riskHtml}
+    <textarea id="review-text">${esc(lines.join('\n'))}</textarea>
+    <button class="btn-secondary" onclick="window.print()" style="margin-top:12px;">🖨️ PDF / 印刷</button>
+  `;
+}
+
+function formatAmount(n) {
+  if (typeof n !== 'number') return n || '0';
+  return n.toLocaleString('ja-JP');
+}
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- Slide presentation modal ----
+let revealInstance = null;
+function openSlideShow(slides) {
+  const container = document.getElementById('slide-container');
+  container.innerHTML = slides.map(s => `
+    <section>
+      <h2>${esc(s.title)}</h2>
+      <p>${esc(s.content)}</p>
+    </section>
+  `).join('');
+  document.getElementById('slide-modal').classList.remove('hidden');
+  if (revealInstance) {
+    revealInstance.sync();
+    revealInstance.slide(0);
+  } else {
+    revealInstance = new Reveal(document.querySelector('#slide-modal .reveal'), { hash: false, embedded: false });
+    revealInstance.initialize();
+  }
+}
+document.getElementById('slide-close').addEventListener('click', () => {
+  document.getElementById('slide-modal').classList.add('hidden');
+});
+
+// ---- Save meeting ----
+document.getElementById('save-btn').addEventListener('click', async () => {
+  if (!state.analysis) return;
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: state.rawText, analysis: state.analysis }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '保存に失敗しました。');
+    showToast('議事録として保存しました。');
+    resetAnalyzeView();
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- History tab ----
+let historyCache = [];
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/meetings');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '一覧の取得に失敗しました。');
+    historyCache = data;
+    renderHistory(historyCache);
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+function renderHistory(items) {
+  const list = document.getElementById('history-list');
+  if (!items.length) { list.innerHTML = '<div class="empty-state">議事録はまだ保存されていません。</div>'; return; }
+  list.innerHTML = items.map(m => `
+    <div class="history-item" onclick="openDetail(${m.id})">
+      <div>
+        <strong>${esc(m.client_name || '不明')}</strong>
+        <div class="meta">${esc(m.meeting_date || '')} ／ ${esc(m.summary || '')}</div>
+      </div>
+      <button class="del-btn" onclick="event.stopPropagation(); deleteMeeting(${m.id})">削除</button>
+    </div>
+  `).join('');
+}
+
+document.getElementById('history-search').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  const filtered = historyCache.filter(m =>
+    (m.client_name || '').toLowerCase().includes(q) || (m.summary || '').toLowerCase().includes(q)
+  );
+  renderHistory(filtered);
+});
+
+async function deleteMeeting(id) {
+  if (!confirm('この議事録を削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/meetings/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || '削除に失敗しました。');
+    }
+    showToast('削除しました。');
+    loadHistory();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function openDetail(id) {
+  try {
+    const res = await fetch(`/api/meetings/${id}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '詳細の取得に失敗しました。');
+    const a = data.analysis || {};
+    document.getElementById('detail-box').innerHTML = `
+      <h2>${esc(a.client_name || '不明')}　<small style="color:#8892A0;font-size:14px;">${esc(a.meeting_date || '')}</small></h2>
+      <p>${esc(a.summary || '')}</p>
+      <h3>問題点</h3>
+      ${(a.problems || []).map(p => `<div class="card problem-${esc(p.priority || '中')}"><h4>${esc(p.title)}<span class="priority-badge priority-${esc(p.priority || '中')}">${esc(p.priority || '中')}</span></h4><p>${esc(p.detail || '')}</p></div>`).join('') || '<div class="empty-state">なし</div>'}
+      <h3>タスク</h3>
+      ${(a.tasks || []).map(t => `<div class="card"><h4>${esc(t.task)}</h4><div class="task-meta">担当: ${esc(t.owner || '未指定')} ／ 期限: ${esc(t.deadline || '未指定')}</div></div>`).join('') || '<div class="empty-state">なし</div>'}
+    `;
+    document.getElementById('detail-modal').classList.remove('hidden');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+document.getElementById('detail-close').addEventListener('click', () => {
+  document.getElementById('detail-modal').classList.add('hidden');
+});
+</script>
+</body>
+</html>
